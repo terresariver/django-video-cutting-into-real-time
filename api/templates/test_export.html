@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Export Tester</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; max-width: 900px; }
+input, button, select { padding: 10px; margin: 8px 0; width: 100%; box-sizing: border-box; }
+button { background: #007bff; color: white; border: none; cursor: pointer; width: auto; }
+button:disabled { background: #ccc; }
+.section { border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 8px; }
+.success { color: green; font-weight: bold; }
+.error { color: red; font-weight: bold; }
+.info { color: blue; }
+video { max-width: 100%; margin: 10px 0; }
+label { display: block; margin-top: 10px; font-weight: bold; }
+.form-group { margin-bottom: 15px; }
+h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <h1>exportation </h1>
+  </header>
+
+  
+  <div class="section">
+    <p class="section-title">config</p>
+    <div class="field">
+      <label>base url</label>
+      <input type="text" id="baseUrl" value="http://127.0.0.1:8000/prototype/video/" placeholder="http://127.0.0.1:8000/prototype/video/" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>video_id</label>
+        <input type="text" id="videoId" value="1" placeholder="e.g. 42" />
+      </div>
+      <div class="field">
+        <label>format</label>
+        <select id="fmt">
+          <option value="mp4">mp4</option>
+          <option value="webm">webm</option>
+          <option value="avi">avi</option>
+          <option value="mov">mov</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>qualite</label>
+      <select id="quality">
+        <option value="low">faible — 500k</option>
+        <option value="medium" selected>moyenne — 1500k</option>
+        <option value="high">haute — 3000k</option>
+      </select>
+    </div>
+  </div>
+
+ 
+  <div class="section">
+    <p class="section-title">actions</p>
+    <div class="actions">
+      <button class="primary" onclick="triggerExport()">exporter</button>
+      <button onclick="pollStatus()">verifier le status</button>
+    </div>
+    <button id="dlBtn" onclick="downloadFile()">Telecharger</button>
+  </div>
+
+  
+  <div class="section">
+    <div class="status-bar">
+      <p class="section-title" style="margin:0">statut</p>
+      <span class="badge badge-idle" id="statusBadge">Aucun</span>
+    </div>
+    <p class="task-id" id="taskIdDisplay">Aucune tache ajoutee</p>
+    <hr class="divider">
+    <div class="log" id="log">
+      <div class="log-line info">
+        <span class="ts">--:--:--</span>
+        <span class="msg">pret appuyer sur exporter</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let currentTaskId = null;
+  let pollInterval  = null;
+
+  function ts() {
+    return new Date().toLocaleTimeString('en', {
+      hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+
+  function log(msg, type = '') {
+    const el   = document.getElementById('log');
+    const line = document.createElement('div');
+    line.className = 'log-line ' + type;
+    line.innerHTML = `<span class="ts">${ts()}</span><span class="msg">${msg}</span>`;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setStatus(s) {
+    const b = document.getElementById('statusBadge');
+    b.textContent = s || 'idle';
+    b.className   = 'badge badge-' + (s || 'idle').toLowerCase();
+  }
+
+  function base() {
+    return document.getElementById('baseUrl').value.replace(/\/$/, '');
+  }
+
+  async function triggerExport() {
+    const payload = {
+      video_id: document.getElementById('videoId').value,
+      format:   document.getElementById('fmt').value,
+      quality:  document.getElementById('quality').value,
+    };
+
+    log(`POST ${base()}/export/  ${JSON.stringify(payload)}`, 'info');
+    clearInterval(pollInterval);
+    document.getElementById('dlBtn').style.display = 'none';
+    setStatus('EN ATTENTE');
+
+    try {
+      const res  = await fetch(`${base()}/export/`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.task_id) {
+        currentTaskId = data.task_id;
+        document.getElementById('taskIdDisplay').textContent = 'task_id: ' + currentTaskId;
+        log(`${res.status} accepte — task_id: ${currentTaskId}`, 'ok');
+        log('verification chaque 2s…', 'info');
+        pollInterval = setInterval(pollStatus, 2000);
+      } else {
+        log(`${res.status} error — ${JSON.stringify(data)}`, 'err');
+        setStatus('ECHOUE');
+      }
+    } catch (e) {
+      log('fetch ECHOUE: ' + e.message, 'err');
+      setStatus('ECHOUE');
+    }
+  }
+
+  async function pollStatus() {
+    if (!currentTaskId) {
+      log('pas de task_id — declencher un export dabord', 'err');
+      return;
+    }
+
+    log(`GET ${base()}/export/status/${currentTaskId}/`, 'info');
+
+    try {
+      const res  = await fetch(`${base()}/export/status/${currentTaskId}/`);
+      const data = await res.json();
+      const s    = (data.status || 'UNKNOWN').toUpperCase();
+
+      setStatus(s);
+      log(
+        `${res.status} — status: ${s}${data.error ? ' | ' + data.error : ''}`,
+        s === 'ECHOUE' ? 'err' : 'ok'
+      );
+
+      if (s === 'TERMINE') {
+        clearInterval(pollInterval);
+        log('exportation prete appuyer  sur telechargement', 'ok');
+        document.getElementById('dlBtn').style.display = 'block';
+      } else if (s === 'ECHOUE') {
+        clearInterval(pollInterval);
+      }
+    } catch (e) {
+      log('Recuperation ECHOUE: ' + e.message, 'err');
+    }
+  }
+
+  async function downloadFile() {
+    if (!currentTaskId) return;
+    const fmt = document.getElementById('fmt').value;
+    const url = `${base()}/export/download/${currentTaskId}/`;
+    log(`GET ${url}`, 'info');
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) { log(`${res.status} error`, 'err'); return; }
+      const blob = await res.blob();
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = `export_${currentTaskId}.${fmt}`;
+      a.click();
+      log('telechargement lance', 'ok');
+    } catch (e) {
+      log('telechargement ECHOUE: ' + e.message, 'err');
+    }
+  }
+</script>
+
+</body>
+</html>
