@@ -18,6 +18,8 @@ Un systeme permettant d'effectuer differente modification video construit avec D
 | Redimensionner | `resize` | `longueur`,`largeur` |
 | Faire pivoter| `rotate` | `angle`|
 | Recadrer| `crop` |  `longueur`,`largeur`,`x`,`y`| 
+|generer un thumnail| `thumbnail` | `temps` (HH:MM:SS)|
+|ajouter un watermark| `watermark` | `Echelle`,`x`,`y`|
 
 # Formats des exports et qualite
 
@@ -77,7 +79,7 @@ prototype/
 │   └── templates/        #front end de test
 |       ├── test_export.html    
 |       └── test_process.html
-│───────services/
+├────── services/
 |       ├── ffmpeg.py     #fonction ffmpeg
 |       └── AI.py
 |
@@ -103,8 +105,8 @@ prototype/
 
 class Video(models.Model):
     titre        # titre de la video
-    original     # fichier video original
-    traite       # fichier video traite
+    original     #  video original
+    traite       #  video traite
     status       # EN ATTENTE, EN COURS DE TRAITEMENT, TERMINE, ECHOUE
     date         # date d'upload
 

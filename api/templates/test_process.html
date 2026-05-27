@@ -53,7 +53,8 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
         <option value="resize">Redimensionner </option>
         <option value="rotate">Faire tourner </option>
         <option value="crop">recadrer</option>
-        <!-- <option value="thumbnail">Generer un thumnail</option> -->
+        <option value="thumbnail">Generer un thumnail</option>
+        <option value="watermark">Ajouter un Watermark</option>
         <!-- <option value="concatenate">Concatener</option> -->
     </select>
 </div>
@@ -111,12 +112,31 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
 </div>
 
 <!-- Thumbnail Parameters -->
- <!-- <div id="thumbnailParam" style="display: none;">
+ <div id="thumbnailParam" style="display: none;">
     <div class="form-group">
         <label>Temps (HH:MM:SS):</label>
         <input type="text" id="thumbnailtime" placeholder="00:00:01" value="00:00:01">
     </div>
-</div> -->
+</div>
+
+<!-- Watermark Parameters -->
+ <div id="watermarkParam" style="display: none;">
+            <div class="form-group">
+                <div>
+                <label>image:</label>
+                <input type="file" id="watermarkimage" accept="image/png">
+                <button onclick="uploadImage()"> Uploader </button>
+                </div>
+                <input type="number" id="ImageID" readonly>
+                <div id="uploadStatusim" style="margin-top: 10px;"></div>
+                <label>Echelle</label>
+                <input type="range" id="watermarkscale" min="5" max="50" value="15" step="1">
+                <label>X</label>
+                <input type="number" id="watermarkx" min="0" max="2000" value="500">
+                <label>Y</label>
+                <input type="number" id="watermarky" min="0" max="2000" value="500">
+            </div>
+</div>
 
 <!-- Concatenate Parameters -->
  <!-- <div id="concatenateParam" style="display: none;">
@@ -151,8 +171,8 @@ function updateActionParams() {
     document.getElementById('resizeParams').style.display = action === 'resize' ? 'block' : 'none';
     document.getElementById('rotateParam').style.display = action === 'rotate' ? 'block' : 'none';
     document.getElementById('cropParams').style.display = action === 'crop' ? 'block' : 'none';
-    // document.getElementById('thumbnailParam').style.display = action === 'thumbnail' ? 'block' : 'none';
-    document.getElementById('concatenateParam').style.display = action === 'concatenate' ? 'block' : 'none';
+    document.getElementById('thumbnailParam').style.display = action === 'thumbnail' ? 'block' : 'none';
+    document.getElementById('watermarkParam').style.display = action === 'watermark' ? 'block' : 'none';
 }
 
 // Initialize
@@ -188,6 +208,35 @@ async function uploadVideo() {
         status.innerHTML = `<span class="erreur">❌ Erreur: ${e.message}</span>`;
     }
 }
+
+async function uploadImage() {
+                const file = document.getElementById('watermarkimage').files[0];
+                if (!file) return alert("choisir une image");
+
+                const formData = new FormData();
+                formData.append('image', file);
+                const status = document.getElementById('uploadStatusim');
+                status.textContent = 'envoie...';
+                status.className = 'info';
+
+                try {
+                    const res = await fetch(`${BASE_URL}/prototype/watermark/upload/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await res.json();
+                    if (res.ok) {
+                        document.getElementById('ImageID').value = data.id;
+                        status.innerHTML = `<span class="succes"> Upload resussi! Video ID: ${data.id}</span>`;
+                    } else {
+                        status.innerHTML = `<span class="erreur">❌ Upload echoue: ${JSON.stringify(data)}</span>`;
+                    }
+                } catch (e) {
+                    status.innerHTML = `<span class="erreur">❌ Erreur: ${e.message}</span>`;
+                }
+            }
+
 
 async function processVideo() {
     const videoId = document.getElementById('videoId').value;
@@ -227,12 +276,21 @@ async function processVideo() {
         }
     }
     
-    // else if (action === 'thumbnail'){
-    //     params ={
-    //         timestamp: document.getElementById('thumbnailtime').value,
-    //     };
+    else if (action === 'thumbnail'){
+        params ={
+            timestamp: document.getElementById('thumbnailtime').value,
+        };
 
-    // }
+    }
+    else if (action === 'watermark') {
+                    params = {
+                        id: parseInt(document.getElementById('ImageID').value),
+                        scale: parseInt(document.getElementById('watermarkscale').value),
+                        x: parseInt(document.getElementById('watermarkx').value),
+                        y:parseInt(document.getElementById('watermarky').value),
+                    }
+                }
+
     
     const status = document.getElementById('processStatus');
     status.textContent = 'Processing... (this may take a few seconds)';

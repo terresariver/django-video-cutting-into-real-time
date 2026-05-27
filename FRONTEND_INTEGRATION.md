@@ -16,6 +16,20 @@ async function uploadVideo(file, title) {
   return data.id; // 
 }
 ```
+### 1.2 Uploader watermark
+Le front end envoie un message a watermark/upload comportant le fichier image
+```javascript
+async function uploadVideo(file, title) {
+  const formData = new FormData();
+  formData.append('image', file);
+  const response = await fetch('http://localhost:8000/watermark/upload/', {
+    method: 'POST',
+    body: formData
+  });
+  const data = await response.json();
+  return data.id; // Id de l'image 
+}
+```
 
 ### 2. Traitement de video
 le front end envoie une requete a video/processing comportant l'id de la video a traiter, l'action a mener et les parametres necessaires

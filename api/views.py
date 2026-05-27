@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser,FormParser
 from .tasks import video_processing,video_exporting
-from .serializers import VideoSerializer
+from .serializers import VideoSerializer,WatermarkSerializer
 
 #front end test
 def test_process(request):
@@ -27,6 +27,16 @@ def upload_video (request):
         serializer.save()
         return Response(serializer.data,status=status.HTTP_201_CREATED) 
     return Response(serializer.errors,status.HTTP_400_BAD_REQUEST) 
+
+#upload watermark
+@api_view(['POST'])
+def upload_watermark(request):
+    serializer = WatermarkSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data,status=status.HTTP_201_CREATED) 
+    return Response(serializer.errors,status.HTTP_400_BAD_REQUEST) 
+
 
 
 #traitement video

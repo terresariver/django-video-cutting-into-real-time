@@ -2,19 +2,20 @@ from celery import shared_task
 import os
 import subprocess
 from django.conf import settings
-from .models import ExportJob, Video
-from .services.ffmpeg import resize_video, trim_video,rotate_video,crop_video,concatenate_videos
+from .models import ExportJob, Video,Watermark
+from .services.ffmpeg import resize_video, trim_video,rotate_video,crop_video,add_watermark,generate_thumbnail
+import uuid
 
 @shared_task
 def video_processing(video_id, action, parameters):
-    '''tache celery: envoyer lavideo ,l'action et les parametres a ffmpeg pour traitment'''
+    '''tache celery: envoyer la video ,l'action et les parametres a ffmpeg pour traitment'''
     try:
         video = Video.objects.get(id=video_id)
         video.status = 'EN COURS DE TRAITEMENT'
         video.save()
         
         input_path = video.original.path
-        output_filename = f"processed_{video_id}_{action}.mp4"
+        output_filename = f"processed_{video_id}_{action}_{uuid.uuid4().hex}.mp4" #uuid4 permet de generer different nom pour plusieurs traitement d'une meme video
         output_path = os.path.join(settings.MEDIA_ROOT, 'videos', 'traite', output_filename)
         
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -42,29 +43,25 @@ def video_processing(video_id, action, parameters):
             y = parameters.get('y',0)
             result = crop_video(input_path,output_path,width,height,x,y)
         
-        # elif action == "concatenate":
-        #     id2 = parameters.get('id2')
-        #     video = Video.objects.get(id=id2)
-        #     input_paths = [ input_path , video.original.path]
-        #     result = concatenate_videos(input_paths,output_path)
+        elif action == "watermark":
+            x = parameters.get('x',10)
+            y = parameters.get('y',10)
+            scale = parameters.get('scale',15)
+            watermark_id = parameters.get('id')
+            watermark = Watermark.objects.get(id=watermark_id)
+            watermark_path = watermark.image.path
+            result = add_watermark(input_path,watermark_path,output_path,scale,x,y)
+
+        elif action == "thumbnail":
+            timestamp = parameters.get('timestamp','00:00:01')
+            output_filename = f"thumbnail_{video_id}_{uuid.uuid4().hex}.jpg"
+            output_path = os.path.join(settings.MEDIA_ROOT, 'videos', 'thumbnails', output_filename)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            result = generate_thumbnail(input_path,output_path,timestamp)
+
+
         
 
-
-    #     elif action == "thumbnail":
-    #         timestamp = parameters.get('timestamp','00:00:01')
-    #         result = generate_thumbnail(input_path,output_path,timestamp)
-
-
-        
-    # #     elif action == "speed":
-    #         speed = parameters.get('speed', 1.0)
-    #         command.extend(["-vf", f"setpts={1/speed}*PTS", "-filter:a", f"atempo={speed}"])
-        
-    #     elif action == "brightness":
-    #         brightness = parameters.get('brightness', 0)
-    #         contrast = parameters.get('contrast', 1)
-    #      
-   
    
        #si le resultat est 0 ou le fichier d'output existe le traitement est reussi
         if (result is not None and result.returncode == 0) or os.path.exists(output_path):
