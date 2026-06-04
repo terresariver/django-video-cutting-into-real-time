@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import export_download, export_status, upload_video, process_video,test_process,export_video,test_export,process_status,upload_watermark
+from .views import export_download, export_status, upload_video, process_video,test_process,export_video,test_export,process_status,upload_watermark,generate_reels
 
 urlpatterns = [
     path('video/upload/',upload_video),
@@ -11,5 +11,6 @@ urlpatterns = [
     path("video/export/status/<task_id>/",export_status),
     path("video/processing/status/<video_id>/",process_status),
     path("video/export/download/<task_id>/",export_download),
-    path("watermark/upload/",upload_watermark)
+    path("watermark/upload/",upload_watermark),
+    path("video/reel/",generate_reels)
 ]

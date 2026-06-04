@@ -1,13 +1,14 @@
 import os
 from django.shortcuts import render
 from django.http import FileResponse
-from .models import Video,ExportJob
+from .models import Video,ExportJob,RealTimeClippingJob,VideoClip
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser,FormParser
-from .tasks import video_processing,video_exporting
+from .tasks import video_processing,video_exporting,sound_extracting,video_trimming,converting_to_portrait,enhancing_audio,video_compressing
 from .serializers import VideoSerializer,WatermarkSerializer
+from celery import chain
 
 #front end test
 def test_process(request):
@@ -70,6 +71,52 @@ def process_video (request):
         return Response({
             "error": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#Creation des reels
+
+def start_reel_process (job_id,params):
+    chain(
+        sound_extracting.s(job_id),
+        video_trimming.s(params),
+        converting_to_portrait.s(params),
+        enhancing_audio.s(),
+        video_compressing.s()
+    ).apply_async()
+
+@api_view(['POST'])
+def generate_reels (request):
+    try:
+        video_id = request.data.get("video_id")
+        parameters = request.data.get("params",{})
+        
+        if not video_id or not parameters:
+            return Response({
+                "erreur": "video id et temps de coupe necessaires"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        video = Video.objects.get(id=video_id)
+        job = RealTimeClippingJob.objects.create(
+            video = video,
+            status    = "EN ATTENTE", 
+        )
+        start_reel_process(job.id,parameters)
+        
+        return Response({
+            'job_id': job.id,
+            "message": "Normalisation video demarre",
+            "status": "En cours de normalisation"
+        }, status=status.HTTP_202_ACCEPTED)
+    
+    except Video.DoesNotExist:
+        return Response({
+            "erreur": f"Video {video_id} introuvable"
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 #etat de traitement
 @api_view(['GET'])
@@ -155,7 +202,7 @@ def export_video(request):
 
 @api_view(["GET"])
 def export_status(request, task_id):
-    '''Point de verification , retourne le status et  l'URL de telechargemt download URL when DONE.
+    '''Point de verification , retourne le status et  l'URL de telechargement download URL 
     '''
     try:
         job = ExportJob.objects.get(task_id=task_id)

@@ -97,6 +97,40 @@ async function checkExportStatus(task_id){
       return data.status; // EN ATTENTE, EN COURS DE TRAITEMENT, TERMINE, ECHOUE
 }
 ```
+### 6.diviser en reel
+Le front end envoie une requete post a video/reel 
+```javascript
+async function GenerateReel(video_id){
+ const response = await fetch('http://localhost:8000/video/export/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      video_id: videoId,
+      parameters: parameters
+    })
+  });
+  const data = await res.json(); //data (task_id,status)
+}
+ex: 
+const params = {
+            mode: 'classic',
+            clips: [
+                {
+                start: '00:00:00' ,
+                end: '00:00:45'
+                },
+                {
+                start: '00:01:30' ,
+                end: '00:02:00'
+                }
+                {
+                  ...
+                }
+
+            ]
+        };
+```
+
 
 
 

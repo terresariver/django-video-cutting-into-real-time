@@ -20,6 +20,8 @@ Un systeme permettant d'effectuer differente modification video construit avec D
 | Recadrer| `crop` |  `longueur`,`largeur`,`x`,`y`| 
 |generer un thumnail| `thumbnail` | `temps` (HH:MM:SS)|
 |ajouter un watermark| `watermark` | `Echelle`,`x`,`y`|
+|superposer un texte| `text_overlay`|`texte`,`taille de la police`,`x`,`y`,`style` (1,2,3,4)|
+|decouper en reel|`reel`|`timelines(debut-fin,debut-fin,...),mode(classic/flouter/couper et center)|
 
 # Formats des exports et qualite
 
@@ -91,6 +93,9 @@ prototype/
 │   └── videos/
 │       ├── originals/    # videos uploadees
 │       ├── traite/       # videos traites
+│       ├── thumbnails     # vignette des videos
+│       ├── audio/       # audio pour sous titrages
+│       ├── clips/       # clips videos(decoupee en reel)
 │       └── exports/      # videos telechargees
 ├── README.md
 ├── FRONTEND_INTEGRATION.md
@@ -107,8 +112,10 @@ class Video(models.Model):
     titre        # titre de la video
     original     #  video original
     traite       #  video traite
+    audio        #  son de la video
     status       # EN ATTENTE, EN COURS DE TRAITEMENT, TERMINE, ECHOUE
     date         # date d'upload
+    thumblail    #vignette 
 
 
 

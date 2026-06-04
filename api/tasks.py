@@ -1,9 +1,12 @@
 from celery import shared_task
 import os
+import shutil
 import subprocess
 from django.conf import settings
-from .models import ExportJob, Video,Watermark
-from .services.ffmpeg import resize_video, trim_video,rotate_video,crop_video,add_watermark,generate_thumbnail
+from .models import ExportJob, Video,Watermark,RealTimeClippingJob,VideoClip
+from .services.ffmpeg import resize_video, trim_video,rotate_video,crop_video,\
+add_watermark,generate_thumbnail,text_overlay,extract_audio,\
+enhance_audio,compress_video,portrait_blurr_background,portrait_classic,portrait_crop_center
 import uuid
 
 @shared_task
@@ -59,6 +62,15 @@ def video_processing(video_id, action, parameters):
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             result = generate_thumbnail(input_path,output_path,timestamp)
 
+        elif action == "text_overlay":
+            text = parameters.get('text','')
+            x = parameters.get('x','(w-text_w)/2') 
+            y = parameters.get ('y','h-100')
+            fontsize = parameters.get('fontsize',40)
+            style = parameters.get('style',1)
+            result = text_overlay(input_path,output_path,text,x,y,fontsize,style)
+
+
 
         
 
@@ -86,6 +98,241 @@ def video_processing(video_id, action, parameters):
         except:
             pass
         return f"Erreur lors du traitement de la video {video_id}: {str(e)}"
+
+
+
+@shared_task
+def sound_extracting(job_id):
+    """tache celery: extraction du son pour generation des sous titres"""
+    try:
+        job =  RealTimeClippingJob.objects.get(id=job_id)
+        video_id = job.video.id
+        video = Video.objects.get(id=video_id)  
+        video.status = 'EN COURS DE TRAITEMENT'
+        video.save()      
+        input_path = video.original.path
+        output_filename = f"audio_{video_id}_{uuid.uuid4().hex}.mp3" 
+        output_path = os.path.join(settings.MEDIA_ROOT, 'videos', 'audio', output_filename)
+        
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        result = extract_audio(input_path,output_path)
+
+        if (result is not None and result.returncode == 0) or os.path.exists(output_path):
+            relative_path = os.path.relpath(output_path, settings.MEDIA_ROOT)
+            video.audio = relative_path
+            job.status = "SON EXTRAIT"
+            video.status = "TERMINE"
+            video.save()
+            job.save()
+            return job_id
+        else:
+            video.status = 'ECHOUE'
+            video.save()
+            stderr = getattr(result, 'stderr', None) if result is not None else 'no result'
+            return f"extraction du son de la video {video_id} echoue: {stderr}"
+    
+    except Video.DoesNotExist:
+         return f"Video {video_id} introuvable"
+    except Exception as e:
+        try:
+            video = Video.objects.get(id=video_id)
+            video.status = 'ECHOUE'
+            video.save()
+        except:
+            pass
+        return f"Erreur lors de l'extraction du son de la video {video_id}: {str(e)}"
+
+
+
+@shared_task
+def video_trimming (job_id,params):
+    """tache celery: couper la video en clip"""
+    try:
+        job =  RealTimeClippingJob.objects.get(id=job_id)
+        video_id = job.video.id
+        video = Video.objects.get(id=video_id)
+        video.status = 'EN COURS DE TRAITEMENT'
+        video.save() 
+    
+        input_path = video.original.path 
+        clips_timeline = params.get('clips',[])
+        #creation du fichier et du nom de chaque clip
+        for i,(start,end) in enumerate(clips_timeline):
+            clip = VideoClip.objects.create(
+                job = job,
+                debut = clips_timeline[i][start],
+                fin = clips_timeline[i][end]
+            )
+            output_filename = f"clip{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
+            output_path =  os.path.join(settings.MEDIA_ROOT, 'videos', 'clips',f'{video_id}', output_filename)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            result = trim_video (input_path,output_path,clip.debut,clip.fin)
+
+            if (result is not None and result.returncode == 0) or os.path.exists(output_path):
+                relative_path = os.path.relpath(output_path, settings.MEDIA_ROOT)
+                clip.clip = relative_path
+                clip.save()
+                video.status = "TERMINE"
+                video.save()
+            else:
+                video.status = 'ECHOUE'
+                video.save()
+                stderr = getattr(result, 'stderr', None) if result is not None else 'no result'
+                return f"coupe de la video {video_id} echoue: {stderr}"
+        job.status = "CLIPEE"
+        job.save()
+        return job_id
+    
+    except Video.DoesNotExist:
+         return f"Video {video_id} introuvable"
+    except Exception as e:
+        try:
+            video = Video.objects.get(id=video_id)
+            video.status = 'ECHOUE'
+            video.save()
+        except:
+            pass
+        return f"Erreur lors de la coupe de la video {video_id}: {str(e)}"
+
+
+@shared_task
+def converting_to_portrait (job_id,params):
+    try:
+        job =  RealTimeClippingJob.objects.get(id=job_id)
+        video_id = job.video.id
+        video = Video.objects.get(id=video_id)
+        all_clips = job.clips.all()
+        mode = params.get('mode')
+        for i,clip in enumerate(all_clips):
+            clip.status = "EN COURS DE TRAITEMENT"
+            clip.save()
+            input_path = clip.clip.path
+            output_filename = f"clip_portrait{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
+            output_path =  os.path.join(settings.MEDIA_ROOT, 'videos', 'clips',f'{video_id}', output_filename)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            if mode == 'crop':
+                result = portrait_crop_center(input_path,output_path)
+            elif mode == "blur":
+                result = portrait_blurr_background(input_path,output_path)
+            else:
+                result = portrait_classic(input_path,output_path)
+
+            if (result is not None and result.returncode == 0) or os.path.exists(output_path):
+                #suppression du clip avant la conversion en portrait
+                shutil.move(output_path,input_path)
+                #relative_path = os.path.relpath(input_path, settings.MEDIA_ROOT)
+                clip.clip = input_path
+                clip.status = "TERMINE"
+                clip.save()
+            else:
+                clip.status = 'ECHOUE'
+                clip.save()
+                stderr = getattr(result, 'stderr', None) if result is not None else 'no result'
+                return f"conversion en portrait de la video {video_id} echoue: {stderr}"
+        job.status = "PORTRAIT"
+        job.save()
+        return job_id
+    
+    except Video.DoesNotExist:
+         return f"Video {video_id} introuvable"
+    except Exception as e:
+        try:
+            video = Video.objects.get(id=video_id)
+            video.status = 'ECHOUE'
+            video.save()
+        except:
+            pass
+        return f"Erreur lors de la conversion en portrait de la video {video_id}: {str(e)}"
+
+
+@shared_task
+def enhancing_audio(job_id):
+    try:
+        job =  RealTimeClippingJob.objects.get(id=job_id)
+        video_id = job.video.id
+        video = Video.objects.get(id=video_id)
+        all_clips = job.clips.all()
+        for i,clip in enumerate(all_clips):
+            clip.status = "EN COURS DE TRAITEMENT"
+            clip.save()
+            input_path = clip.clip.path
+            output_filename = f"clip_portrait{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
+            output_path =  os.path.join(settings.MEDIA_ROOT, 'videos', 'clips',f'{video_id}', output_filename)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            result = enhance_audio(input_path,output_path)
+
+            if (result is not None and result.returncode == 0) or os.path.exists(output_path):
+                #suppression du clip avant la conversion en portrait
+                shutil.move(output_path,input_path)
+                #relative_path = os.path.relpath(output_path, settings.MEDIA_ROOT)
+                clip.clip = input_path
+                clip.status = "TERMINE"
+                clip.save()
+            else:
+                clip.status = 'ECHOUE'
+                clip.save()
+                stderr = getattr(result, 'stderr', None) if result is not None else 'no result'
+                return f"amelioration du son  de la video {video_id} echoue: {stderr}"
+        job.status = "SON AMELIORE"
+        job.save()
+        return job_id
+    
+    except Video.DoesNotExist:
+         return f"Video {video_id} introuvable"
+    except Exception as e:
+        try:
+            video = Video.objects.get(id=video_id)
+            video.status = 'ECHOUE'
+            video.save()
+        except:
+            pass
+        return f"Erreur lors de l'amelioration du son  de la video {video_id}: {str(e)}"
+
+@shared_task
+def video_compressing(job_id):
+    try:
+        job =  RealTimeClippingJob.objects.get(id=job_id)
+        video_id = job.video.id
+        video = Video.objects.get(id=video_id)
+        all_clips = job.clips.all()
+        for i,clip in enumerate(all_clips):
+            clip.status = "EN COURS DE TRAITEMENT"
+            clip.save()
+            input_path = clip.clip.path
+            output_filename = f"clipf_portrait{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
+            output_path =  os.path.join(settings.MEDIA_ROOT, 'videos', 'clips',f'{video_id}', output_filename)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            result = compress_video(input_path,output_path)
+
+            if (result is not None and result.returncode == 0) or os.path.exists(output_path):
+                #suppression du clip avant la conversion en portrait
+                shutil.move(output_path,input_path)
+                #relative_path = os.path.relpath(output_path, settings.MEDIA_ROOT)
+                clip.clip = input_path
+                clip.status = "TERMINE"
+                clip.save()
+            else:
+                clip.status = 'ECHOUE'
+                clip.save()
+                stderr = getattr(result, 'stderr', None) if result is not None else 'no result'
+                return f"compression   de la video {video_id} echoue: {stderr}"
+        job.status = "COMPRESSEE"
+        job.save()
+        return job_id
+    
+    except Video.DoesNotExist:
+         return f"Video {video_id} introuvable"
+    except Exception as e:
+        try:
+            video = Video.objects.get(id=video_id)
+            video.status = 'ECHOUE'
+            video.save()
+        except:
+            pass
+        return f"Erreur lors de la compression  de la video {video_id}: {str(e)}"
 
 
 

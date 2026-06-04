@@ -55,6 +55,8 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
         <option value="crop">recadrer</option>
         <option value="thumbnail">Generer un thumnail</option>
         <option value="watermark">Ajouter un Watermark</option>
+        <option value="text_overlay">Ajouter un texte</option>
+        <option value="reel">Decouper en reel</option>
         <!-- <option value="concatenate">Concatener</option> -->
     </select>
 </div>
@@ -68,6 +70,36 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     <div class="form-group">
         <label>Fin (HH:MM:SS):</label>
         <input type="text" id="trimEnd" placeholder="00:01:00" value="00:00:10">
+    </div>
+</div>
+
+<!-- Reel Parameters -->
+<div id="reelParams" style="display: none;">
+    <div class ="form-group">
+        <label>Mode</label>
+        <select id="reelmode">
+            <option value="classic">classique</option>
+            <option value="blur">flouter l'arriere plan</option>
+            <option value="crop">couper et centrer</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>CLIP1</label><br>
+        <label>Debut (HH:MM:SS):</label>
+        <input type="text" id="clip1start" placeholder="00:00:00" value="00:00:00">
+    </div>
+    <div class="form-group">
+        <label>Fin (HH:MM:SS):</label>
+        <input type="text" id="clip1end" placeholder="00:01:00" value="00:00:10">
+    </div>
+    <div class="form-group">
+        <label>CLIP2</label><br>
+        <label>Debut (HH:MM:SS):</label>
+        <input type="text" id="clip2start" placeholder="00:00:00" value="00:00:10">
+    </div>
+    <div class="form-group">
+        <label>Fin (HH:MM:SS):</label>
+        <input type="text" id="clip2end" placeholder="00:01:00" value="00:00:20">
     </div>
 </div>
 
@@ -138,6 +170,29 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
             </div>
 </div>
 
+<!-- text overlay parameters -->
+  <div id="textoverlayParam" style="display: none;">
+            <div class="form-group">
+                <label>Texte</label>
+                <input type="text" id="textoverlaytext" placeholder="entrer un texte">
+                <label>X</label>
+                <input type="number" id="textoverlayx" min="0" max="2000" value="100">
+                <label>Y</label>
+                <input type="number" id="textoverlayy" min="0" max="2000" value="100">
+                <label>taille de la police</label>
+                <input type="number" id="textoverlayfontsize" min="10" max="100" value="40">
+                <label>style</label>
+                <select id="textoverlaystyle">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                </select>
+
+            </div>
+</div>
+
+
 <!-- Concatenate Parameters -->
  <!-- <div id="concatenateParam" style="display: none;">
     <div class="form-group">
@@ -173,6 +228,8 @@ function updateActionParams() {
     document.getElementById('cropParams').style.display = action === 'crop' ? 'block' : 'none';
     document.getElementById('thumbnailParam').style.display = action === 'thumbnail' ? 'block' : 'none';
     document.getElementById('watermarkParam').style.display = action === 'watermark' ? 'block' : 'none';
+    document.getElementById('textoverlayParam').style.display = action === 'text_overlay' ? 'block' : 'none';
+    document.getElementById('reelParams').style.display = action === 'reel' ? 'block' : 'none';
 }
 
 // Initialize
@@ -290,6 +347,23 @@ async function processVideo() {
                         y:parseInt(document.getElementById('watermarky').value),
                     }
                 }
+    else if (action === 'text_overlay'){
+        params = {
+                        text:document.getElementById('textoverlaytext').value ,
+                        x: parseInt(document.getElementById('textoverlayx').value),
+                        y:parseInt(document.getElementById('textoverlayy').value),
+                        fontsize:parseInt(document.getElementById('textoverlayfontsize').value),
+                        style: parseInt(document.getElementById('textoverlaystyle').value),
+                    }
+    }
+
+    else if (action ==="reel"){
+        ConvertReel();
+        return;
+    }
+    else{
+        return;
+    }
 
     
     const status = document.getElementById('processStatus');
@@ -318,6 +392,50 @@ async function processVideo() {
         status.innerHTML = `<span class="error">❌ ${e.message}</span>`;
     }
 }
+
+async function ConvertReel() {
+    const videoId = document.getElementById('videoId').value;
+    if (!videoId) return alert("Please upload a video first");
+    const params = {
+            mode: document.getElementById('reelmode').value,
+            clips: [
+                {
+                start: document.getElementById('clip1start').value ,
+                end: document.getElementById('clip1end').value
+                },
+                {
+                start: document.getElementById('clip2start').value ,
+                end: document.getElementById('clip2end').value
+                }
+
+            ]
+        };
+    const status = document.getElementById('processStatus');
+    status.textContent = 'Processing... (this may take a few seconds)';
+    status.className = 'info';
+    
+    try {
+        const res = await fetch(`${BASE_URL}/prototype/video/reel/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                video_id: parseInt(videoId),
+                params: params
+            })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            status.innerHTML = `<span class="success">✅ Processing started! Task ID: ${data.task_id}<br/>Status: ${data.status}<br/>Check the status below to see when it's done.</span>`;
+            console.log("Processing response:", data);
+        } else {
+            status.innerHTML = `<span class="error">❌ Error: ${data.error || JSON.stringify(data)}</span>`;
+        }
+    } catch (e) {
+        status.innerHTML = `<span class="error">❌ ${e.message}</span>`;
+    }
+}
+
 
 async function checkStatus() {
     const videoId = document.getElementById('statusVideoId').value;
