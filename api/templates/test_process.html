@@ -220,6 +220,18 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
 <script>
 const BASE_URL = 'http://127.0.0.1:8000';
 
+function getAuthHeaders() {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return null;
+    }
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
+}
+
 function updateActionParams() {
     const action = document.getElementById('action').value;
     document.getElementById('trimParams').style.display = action === 'trim' ? 'block' : 'none';
@@ -238,21 +250,28 @@ updateActionParams();
 async function uploadVideo() {
     const file = document.getElementById('videoFile').files[0];
     if (!file) return alert("choisir une video");
-    
+
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return;
+    }
+
     const formData = new FormData();
     formData.append('original', file);
     formData.append('titre', document.getElementById('title').value);
-    
+
     const status = document.getElementById('uploadStatus');
     status.textContent = 'envoie...';
     status.className = 'info';
-    
+
     try {
         const res = await fetch(`${BASE_URL}/prototype/video/upload/`, {
             method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
-        
+
         const data = await res.json();
         if (res.ok) {
             document.getElementById('videoId').value = data.id;
@@ -267,41 +286,54 @@ async function uploadVideo() {
 }
 
 async function uploadImage() {
-                const file = document.getElementById('watermarkimage').files[0];
-                if (!file) return alert("choisir une image");
+    const file = document.getElementById('watermarkimage').files[0];
+    if (!file) return alert("choisir une image");
 
-                const formData = new FormData();
-                formData.append('image', file);
-                const status = document.getElementById('uploadStatusim');
-                status.textContent = 'envoie...';
-                status.className = 'info';
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return;
+    }
 
-                try {
-                    const res = await fetch(`${BASE_URL}/prototype/watermark/upload/`, {
-                        method: 'POST',
-                        body: formData
-                    });
+    const formData = new FormData();
+    formData.append('image', file);
+    const status = document.getElementById('uploadStatusim');
+    status.textContent = 'envoie...';
+    status.className = 'info';
 
-                    const data = await res.json();
-                    if (res.ok) {
-                        document.getElementById('ImageID').value = data.id;
-                        status.innerHTML = `<span class="succes"> Upload resussi! Video ID: ${data.id}</span>`;
-                    } else {
-                        status.innerHTML = `<span class="erreur">❌ Upload echoue: ${JSON.stringify(data)}</span>`;
-                    }
-                } catch (e) {
-                    status.innerHTML = `<span class="erreur">❌ Erreur: ${e.message}</span>`;
-                }
-            }
+    try {
+        const res = await fetch(`${BASE_URL}/prototype/watermark/upload/`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('ImageID').value = data.id;
+            status.innerHTML = `<span class="succes"> Upload resussi! Video ID: ${data.id}</span>`;
+        } else {
+            status.innerHTML = `<span class="erreur">❌ Upload echoue: ${JSON.stringify(data)}</span>`;
+        }
+    } catch (e) {
+        status.innerHTML = `<span class="erreur">❌ Erreur: ${e.message}</span>`;
+    }
+}
 
 
 async function processVideo() {
     const videoId = document.getElementById('videoId').value;
     if (!videoId) return alert("Please upload a video first");
-    
+
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return;
+    }
+
     const action = document.getElementById('action').value;
     let params = {};
-    
+
     if (action === 'trim') {
         params = {
             start: document.getElementById('trimStart').value,
@@ -324,7 +356,7 @@ async function processVideo() {
             height: parseInt(document.getElementById('cropheight').value),
             x :parseInt(document.getElementById('cropx').value),
             y: parseInt(document.getElementById('cropy').value)
-            
+
         };
     }
     else if (action==='concatenate'){
@@ -332,7 +364,7 @@ async function processVideo() {
             id2 : parseInt(document.getElementById('id2').value)
         }
     }
-    
+
     else if (action === 'thumbnail'){
         params ={
             timestamp: document.getElementById('thumbnailtime').value,
@@ -340,21 +372,21 @@ async function processVideo() {
 
     }
     else if (action === 'watermark') {
-                    params = {
-                        id: parseInt(document.getElementById('ImageID').value),
-                        scale: parseInt(document.getElementById('watermarkscale').value),
-                        x: parseInt(document.getElementById('watermarkx').value),
-                        y:parseInt(document.getElementById('watermarky').value),
-                    }
-                }
+        params = {
+            id: parseInt(document.getElementById('ImageID').value),
+            scale: parseInt(document.getElementById('watermarkscale').value),
+            x: parseInt(document.getElementById('watermarkx').value),
+            y:parseInt(document.getElementById('watermarky').value),
+        }
+    }
     else if (action === 'text_overlay'){
         params = {
-                        text:document.getElementById('textoverlaytext').value ,
-                        x: parseInt(document.getElementById('textoverlayx').value),
-                        y:parseInt(document.getElementById('textoverlayy').value),
-                        fontsize:parseInt(document.getElementById('textoverlayfontsize').value),
-                        style: parseInt(document.getElementById('textoverlaystyle').value),
-                    }
+            text:document.getElementById('textoverlaytext').value ,
+            x: parseInt(document.getElementById('textoverlayx').value),
+            y:parseInt(document.getElementById('textoverlayy').value),
+            fontsize:parseInt(document.getElementById('textoverlayfontsize').value),
+            style: parseInt(document.getElementById('textoverlaystyle').value),
+        }
     }
 
     else if (action ==="reel"){
@@ -365,22 +397,25 @@ async function processVideo() {
         return;
     }
 
-    
+
     const status = document.getElementById('processStatus');
     status.textContent = 'Processing... (this may take a few seconds)';
     status.className = 'info';
-    
+
     try {
         const res = await fetch(`${BASE_URL}/prototype/video/processing/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
                 video_id: parseInt(videoId),
                 action: action,
                 params: params
             })
         });
-        
+
         const data = await res.json();
         if (res.ok) {
             status.innerHTML = `<span class="success">✅ Processing started! Task ID: ${data.task_id}<br/>Status: ${data.status}<br/>Check the status below to see when it's done.</span>`;
@@ -396,34 +431,44 @@ async function processVideo() {
 async function ConvertReel() {
     const videoId = document.getElementById('videoId').value;
     if (!videoId) return alert("Please upload a video first");
-    const params = {
-            mode: document.getElementById('reelmode').value,
-            clips: [
-                {
-                start: document.getElementById('clip1start').value ,
-                end: document.getElementById('clip1end').value
-                },
-                {
-                start: document.getElementById('clip2start').value ,
-                end: document.getElementById('clip2end').value
-                }
 
-            ]
-        };
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return;
+    }
+
+    const params = {
+        mode: document.getElementById('reelmode').value,
+        clips: [
+            {
+            start: document.getElementById('clip1start').value ,
+            end: document.getElementById('clip1end').value
+            },
+            {
+            start: document.getElementById('clip2start').value ,
+            end: document.getElementById('clip2end').value
+            }
+
+        ]
+    };
     const status = document.getElementById('processStatus');
     status.textContent = 'Processing... (this may take a few seconds)';
     status.className = 'info';
-    
+
     try {
         const res = await fetch(`${BASE_URL}/prototype/video/reel/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
                 video_id: parseInt(videoId),
                 params: params
             })
         });
-        
+
         const data = await res.json();
         if (res.ok) {
             status.innerHTML = `<span class="success">✅ Processing started! Task ID: ${data.task_id}<br/>Status: ${data.status}<br/>Check the status below to see when it's done.</span>`;
@@ -440,14 +485,23 @@ async function ConvertReel() {
 async function checkStatus() {
     const videoId = document.getElementById('statusVideoId').value;
     if (!videoId) return alert("Enter a video ID");
-    
+
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return;
+    }
+
     const status = document.getElementById('statusResult');
     status.textContent = 'Checking...';
     status.className = 'info';
     try{
         const res = await fetch(`${BASE_URL}/prototype/video/processing/status/${videoId}/`,{
             method : 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
         });
 
     const data = await res.json();

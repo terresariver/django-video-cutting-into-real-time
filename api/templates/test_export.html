@@ -117,7 +117,18 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     return document.getElementById('baseUrl').value.replace(/\/$/, '');
   }
 
+  function getAuthToken() {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      log('❌ Please login first at /prototype/test/login/', 'err');
+    }
+    return token;
+  }
+
   async function triggerExport() {
+    const token = getAuthToken();
+    if (!token) return;
+
     const payload = {
       video_id: document.getElementById('videoId').value,
       format:   document.getElementById('fmt').value,
@@ -132,7 +143,10 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     try {
       const res  = await fetch(`${base()}/export/`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body:    JSON.stringify(payload),
       });
       const data = await res.json();
@@ -154,6 +168,9 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
   }
 
   async function pollStatus() {
+    const token = getAuthToken();
+    if (!token) return;
+
     if (!currentTaskId) {
       log('pas de task_id — declencher un export dabord', 'err');
       return;
@@ -162,7 +179,11 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     log(`GET ${base()}/export/status/${currentTaskId}/`, 'info');
 
     try {
-      const res  = await fetch(`${base()}/export/status/${currentTaskId}/`);
+      const res  = await fetch(`${base()}/export/status/${currentTaskId}/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await res.json();
       const s    = (data.status || 'UNKNOWN').toUpperCase();
 
@@ -185,13 +206,20 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
   }
 
   async function downloadFile() {
+    const token = getAuthToken();
+    if (!token) return;
+
     if (!currentTaskId) return;
     const fmt = document.getElementById('fmt').value;
     const url = `${base()}/export/download/${currentTaskId}/`;
     log(`GET ${url}`, 'info');
 
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) { log(`${res.status} error`, 'err'); return; }
       const blob = await res.blob();
       const a    = document.createElement('a');

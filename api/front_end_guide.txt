@@ -1,0 +1,212 @@
+INTEGRATION DU FRONT END :
+1.UTILISATEUR
+-enregistrement (pour les nouveaux utilisateurs) et login
+Le front end envoie  l’email a auth/register , le backend cree l’utilisateur et renvoie un token JWT 
+Ex : {
+    "user":{
+        "id":5,
+        "email":"user@example.com"
+    },
+    "access":"sjdhasklfhlsidf...",
+    "refresh":"susliufhsudifhlidfg..."
+}
+Example de fonction :
+async function registerUser(data) {
+    const res = await fetch ('http://localhost:8000/auth/register/',{
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    })
+    
+};
+const result = await res.JSON();
+if (res.ok){
+    //sauvegarder le token
+    localStorage.setItem('accessToken',result.access);
+    localStorage.setItem('refreshToken',result.refresh);
+    //sauvegarder linfo de l'utilisatuer
+    localStorage.setItem('user',JSON.stringify(result.user));
+}
+
+Pour le login le front end  envoie l’email a auth/login et recoit un token JWT
+Example : async function loginUser (email) {
+    const res = await fetch ('http://localhost:8000/auth/login',{
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
+        body:JSON.stringify(email)
+    });
+    const data = await res.json();
+    if (res.ok){
+        localStorage.setItem('accessToken',data.access);
+        localStorage.setItem('refreshToken',data.refresh);
+        localStorage.setItem('user',JSON.stringify(data.user));
+    }
+    
+}
+
+Pour le logout le front end va sur auth/logout/{refreshToken}
+
+async function logout(){
+    const refresh = localStorage.getItem('refreshToken');
+    if (refresh){
+        try {
+            await 'http://localhost:8000/'.post('auth/logout/',{refresh});
+        }
+        catch (e){
+
+        }
+    }
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+
+}
+
+2-UPLOADER LES FICHIERS
+**créer un fichier api.js  **
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:8000/api/';   // Change in production
+
+const API = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 120000,        // 2 minutes (good for video processing)
+});
+
+// === Request Interceptor: Attach Token ===
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// === Response Interceptor: Auto Refresh Token ===
+API.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) throw new Error("No refresh token");
+
+        const res = await axios.post(`${API_BASE_URL}auth/token/refresh/`, {
+          refresh: refreshToken
+        });
+
+        const newAccessToken = res.data.access;
+        localStorage.setItem('accessToken', newAccessToken);
+
+        // Retry original request with new token
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return API(originalRequest);
+
+      } catch (refreshError) {
+        console.error("Token refresh failed. Logging out...");
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default API;
+
+
+Le front end envoie un formData pour uploader une image ou une video et recoit l’id de la video/image/son
+import API from './api';
+//1.upload Video
+ const formData = new FormData();
+  formData.append('original', file);
+  formData.append('titre', title); //optionel
+  const res = await API.post('video/upload/',formData);
+//uploader un watermark
+const formData = new FormData();
+  formData.append('image', file);l
+  const res = await API.post('watermark/upload/',formData);
+  //uploader un son
+const formData = new FormData();
+  formData.append('son', file);l
+  const res = await API.post('sound/upload/',formData);
+
+3-TRAITER LES VIDEOS
+a-Traitement principaux : (sous-titrage,inserer des B-roll,….)
+
+Le front end envoie l’id de la video a traiter et les parametres necessaires a video/{traitement}
+|decouper en reel|`reel`|`timelines(debut-fin,debut-fin,...),mode(classic/flouter/couper et center)|
+
+Ex :
+//1.sous titres
+  const res = await API.post('video/subtitle/',{
+    video_id: videoID
+  });
+//2.inserer un B-roll
+const res = await API.post('video/Broll/',{
+    b_roll_id : BRollId
+
+});
+//decouper en reel 
+Const res = await API.post (‘video/reel/’,{
+Video_id: videoID,
+params = {
+            mode:,
+            timelines: [
+                {
+                start:,
+                end:
+                },
+                {
+                start:  ,
+                end: 
+                }
+
+            ]
+        }
+}) ;
+
+
+b-traitement secondaires : Traitement effectues manuellement par l’utilisateur avant d’exporter la videos. Le front end envoie la requete a video/processing comportant l’id de la video a traiter,l’action et les parametres
+(faire tourner,couper,recadrer,faire zoomer….)
+Ex :
+| Operation | Action | Parametre |
+|-----------|--------|------------|
+| Decouper | `trim` | `debut`, `fin` (HH:MM:SS) | 
+| Redimensionner | `resize` | `longueur`,`largeur` |
+| Faire pivoter| `rotate` | `angle`|
+| Recadrer| `crop` |  `longueur`,`largeur`,`x`,`y`| 
+|generer un thumnail| `thumbnail` | `temps` (HH:MM:SS)|
+|ajouter un watermark| `watermark` | `Echelle`,`x`,`y`,`watermark_id`|
+|superposer un texte| `text_overlay`|`texte`,`taille de la police`,`x`,`y`,`style` (1,2,3,4)|
+Ex :
+const res = await API.post('video/processing',{
+video_id : 4,
+action : trim, 
+parameters: {
+  start: 00:00:10,
+  end: 00:00:30
+}); 
+c-verifier l’etat de traitement :
+le front end envoie une requete a 
+/video/processing/status/${videoId}
+	Response.status (En cours de traitement/termine/echoue/En attente)
+4-exporter les videos/clips
+Le front end envoie une demande d’export a video/export  comportant video_id,la qualite (‘low’,’medium’,’high’) ,et le format (‘mp4’,’mov’,’avi’,’webm’ ) -> Response.task_id
+b.verifier l’etat de l’export
+Le front end envoie une demande video/export/status/{task_id}
+c.telecharger le fichier exporte
+const blobRes = await API.get(‘video/export/download/{task_id},{
+responseType:’blob’
+});
+

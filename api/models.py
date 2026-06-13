@@ -1,10 +1,24 @@
 from django.db import models
 from dataclasses import dataclass,field
+from django.contrib.auth.models import AbstractUser
 import os
 
 
 
 # Create your models here.
+class User (AbstractUser):
+    email = models.EmailField (unique=True)
+    full_name = models.CharField(max_length=255,blank=True)
+    is_active = models.BooleanField(default=True)
+    is_premium = models.BooleanField(default=True)
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
+    def __str__(self) -> str:
+        return self.email
+
+
+
 class Video(models.Model):
     
     STATUS_CHOICES = [
@@ -13,6 +27,7 @@ class Video(models.Model):
         ('TERMINE','termine'),
         ('ECHOUE','echoue'),
     ]
+    user = models.ForeignKey(User,on_delete=models.CASCADE,related_name='videos')
     titre = models.CharField(max_length=255,blank=True)
     original = models.FileField(upload_to='videos/originals')
     traite = models.FileField(upload_to='videos/traite',blank=True,null=True)
@@ -44,6 +59,28 @@ class ExportJob(models.Model):
 
     def __str__(self):
         return f"ExportJob({self.task_id}) — {self.status}"
+
+
+class ClipExportJob(models.Model):
+    """modele de traque des exportations de clips"""
+    STATUS_CHOICES = [
+        ("EN ATTENTE",'en attente'),
+        ("EN COURS DE TRAITEMENT",'en cours de traitement'),
+        ('TERMINE','termine'),
+        ('ECHOUE','echoue'),
+    ]
+
+    clip        = models.ForeignKey("VideoClip", on_delete=models.CASCADE, related_name="exports")
+    task_id     = models.CharField(max_length=255, unique=True, db_index=True)
+    fmt         = models.CharField(max_length=10)
+    qualite     = models.CharField(max_length=20)
+    status      = models.CharField(max_length=22, choices=STATUS_CHOICES, default="EN ATTENTE")
+    output_path = models.TextField(blank=True, null=True)
+    mes_erreur  = models.TextField(blank=True, null=True)
+    date        = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"ClipExportJob({self.task_id}) — {self.status}"
     
 
 class Watermark(models.Model):
@@ -83,6 +120,7 @@ class VideoClip(models.Model):
         ('TERMINE','termine'),
         ('ECHOUE','echoue'),
     ]
+    user = models.ForeignKey(User,on_delete=models.CASCADE,related_name='clips')
     job = models.ForeignKey(RealTimeClippingJob,on_delete=models.CASCADE,related_name="clips")
     clip = models.FileField(upload_to=clip_upload_path)
     status  = models.CharField(max_length=22, choices=STATUS_CHOICES, default="EN ATTENTE")

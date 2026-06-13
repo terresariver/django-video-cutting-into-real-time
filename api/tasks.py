@@ -3,7 +3,7 @@ import os
 import shutil
 import subprocess
 from django.conf import settings
-from .models import ExportJob, Video,Watermark,RealTimeClippingJob,VideoClip
+from .models import ExportJob, ClipExportJob, Video,Watermark,RealTimeClippingJob,VideoClip
 from .services.ffmpeg import resize_video, trim_video,rotate_video,crop_video,\
 add_watermark,generate_thumbnail,text_overlay,extract_audio,\
 enhance_audio,compress_video,portrait_blurr_background,portrait_classic,portrait_crop_center
@@ -339,19 +339,19 @@ def video_compressing(job_id):
 @shared_task(bind=True)
 def video_exporting(self, video_id, fmt, quality):
     '''tache celery :exporter une video traiter avec la qualite et le format choisi '''
-    
+
     job = None
     try:
-        
+
         job = ExportJob.objects.get(task_id=self.request.id)
         job.status = "EN COURS DE TRAITEMENT"
         job.save(update_fields=["status"])
 
-        
+
         video = Video.objects.get(id=video_id)
         input_path = video.traite.path
 
-      
+
         quality_bitrates = {
             "low":    "500k",
             "medium": "1500k",
@@ -372,7 +372,7 @@ def video_exporting(self, video_id, fmt, quality):
         )
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-      
+
         command = ["ffmpeg", "-i", input_path, "-b:v", bitrate, "-y"]
 
         if fmt == "mp4":
@@ -386,13 +386,13 @@ def video_exporting(self, video_id, fmt, quality):
 
         command.append(output_path)
 
-      
+
         result = subprocess.run(command, capture_output=True, text=True, check=False)
 
         if result.returncode != 0 or not os.path.exists(output_path):
             raise RuntimeError(f"FFmpeg echoue: {result.stderr}")
 
-        
+
         job.status  = "TERMINE"
         job.output_path = output_path
         job.save(update_fields=["status", "output_path"])
@@ -406,4 +406,70 @@ def video_exporting(self, video_id, fmt, quality):
             job.save(update_fields=["status", "mes_erreur"])
 
         # Reesayer 3 fois maximum
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries, max_retries=3)
+
+
+@shared_task(bind=True)
+def clip_exporting(self, clip_id, fmt, quality):
+    '''tache celery: exporter un clip traite avec la qualite et le format choisi'''
+
+    job = None
+    try:
+        job = ClipExportJob.objects.get(task_id=self.request.id)
+        job.status = "EN COURS DE TRAITEMENT"
+        job.save(update_fields=["status"])
+
+        clip = VideoClip.objects.get(id=clip_id)
+        input_path = clip.clip.path
+
+        quality_bitrates = {
+            "low":    "500k",
+            "medium": "1500k",
+            "high":   "3000k",
+        }
+        ext_map = {
+            "mp4":  "mp4",
+            "webm": "webm",
+            "avi":  "avi",
+            "mov":  "mov",
+        }
+        bitrate = quality_bitrates.get(quality, "1500k")
+        ext     = ext_map.get(fmt, "mp4")
+
+        output_filename = f"clip_export_{clip_id}_{quality}.{ext}"
+        output_path     = os.path.join(
+            settings.MEDIA_ROOT, "videos", "clips", "exports", output_filename
+        )
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        command = ["ffmpeg", "-i", input_path, "-b:v", bitrate, "-y"]
+
+        if fmt == "mp4":
+            command.extend(["-c:v", "libx264", "-c:a", "aac", "-preset", "medium"])
+        elif fmt == "webm":
+            command.extend(["-c:v", "libvpx-vp9", "-c:a", "libopus"])
+        elif fmt == "avi":
+            command.extend(["-c:v", "mpeg4", "-c:a", "libmp3lame"])
+        elif fmt == "mov":
+            command.extend(["-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart"])
+
+        command.append(output_path)
+
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+
+        if result.returncode != 0 or not os.path.exists(output_path):
+            raise RuntimeError(f"FFmpeg echoue: {result.stderr}")
+
+        job.status  = "TERMINE"
+        job.output_path = output_path
+        job.save(update_fields=["status", "output_path"])
+
+        return {"status": "TERMINE", "output_path": output_path}
+
+    except Exception as exc:
+        if job:
+            job.status  = "ECHOUE"
+            job.mes_erreur = str(exc)
+            job.save(update_fields=["status", "mes_erreur"])
+
         raise self.retry(exc=exc, countdown=2 ** self.request.retries, max_retries=3)

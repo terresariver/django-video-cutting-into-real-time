@@ -73,7 +73,7 @@ http://127.0.0.1:8000/prototype/test/export/ #exportation
 
 prototype/
 ├── api/
-│   ├── models.py         # modele video
+│   ├── models.py         # modeles 
 │   ├── views.py          # Upload, traitement, export
 │   ├── tasks.py          # traitement de video en utilisant celery
 │   ├── urls.py           

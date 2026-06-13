@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Video,Watermark
+from .models import Video,Watermark,User
 
 class VideoSerializer (serializers.ModelSerializer):
     class Meta:
@@ -13,4 +13,32 @@ class WatermarkSerializer(serializers.ModelSerializer):
     class Meta:
         model = Watermark
         fields = ['id','image']
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id','email','full_name']
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True,required=True,style={'input_type':'password'})
+    password2 = serializers.CharField(write_only=True,required=True,style={'input_type':'password'})
+
+    class Meta:
+        model = User
+        fields = ['email','full_name','password','password2']
+
+    def validate(self,data):
+        if data['password'] != data['password2']:
+            raise serializers.ValidationError({"password":"Les mots de passe ne correspondent pas"})
+        return data
+
+    def create(self,validated_data):
+        validated_data.pop('password2')
+        password = validated_data.pop('password')
+        user = User.objects.create_user(**validated_data,password=password)
+        return user
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True,style={'input_type':'password'})
        
