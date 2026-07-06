@@ -117,23 +117,17 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     return document.getElementById('baseUrl').value.replace(/\/$/, '');
   }
 
-  function getAuthToken() {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      log('❌ Please login first at /prototype/test/login/', 'err');
-    }
-    return token;
-  }
-
   async function triggerExport() {
-    const token = getAuthToken();
-    if (!token) return;
-
     const payload = {
       video_id: document.getElementById('videoId').value,
       format:   document.getElementById('fmt').value,
       quality:  document.getElementById('quality').value,
     };
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+        alert('Please login first at /prototype/test/login/');
+        return;
+    }
 
     log(`POST ${base()}/export/  ${JSON.stringify(payload)}`, 'info');
     clearInterval(pollInterval);
@@ -143,7 +137,7 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     try {
       const res  = await fetch(`${base()}/export/`, {
         method:  'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -168,9 +162,6 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
   }
 
   async function pollStatus() {
-    const token = getAuthToken();
-    if (!token) return;
-
     if (!currentTaskId) {
       log('pas de task_id — declencher un export dabord', 'err');
       return;
@@ -179,10 +170,8 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
     log(`GET ${base()}/export/status/${currentTaskId}/`, 'info');
 
     try {
-      const res  = await fetch(`${base()}/export/status/${currentTaskId}/`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const res  = await fetch(`${base()}/export/status/${currentTaskId}/`,{
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
       const data = await res.json();
       const s    = (data.status || 'UNKNOWN').toUpperCase();
@@ -206,9 +195,6 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
   }
 
   async function downloadFile() {
-    const token = getAuthToken();
-    if (!token) return;
-
     if (!currentTaskId) return;
     const fmt = document.getElementById('fmt').value;
     const url = `${base()}/export/download/${currentTaskId}/`;
@@ -216,9 +202,7 @@ h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
 
     try {
       const res = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
       });
       if (!res.ok) { log(`${res.status} error`, 'err'); return; }
       const blob = await res.blob();

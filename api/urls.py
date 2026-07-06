@@ -8,7 +8,7 @@ from .views import (
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    #auth
+    #authentification
     path('auth/register/', register),
     path('auth/login/', login),
     path('auth/logout/', logout),
@@ -16,7 +16,7 @@ urlpatterns = [
     path('test/login/', test_login),
     path('test/logout/', test_logout),
 
-    #video operations
+    #operations video
     path('video/upload/', upload_video),
     path('video/processing/', process_video),
     path('video/export/', export_video),
@@ -28,7 +28,7 @@ urlpatterns = [
     path('watermark/upload/', upload_watermark),
     path('video/reel/', generate_reels),
 
-    #clip operations
+    #clips
     path('clip/export/', export_clip),
     path('clip/export/status/<task_id>/', clip_export_status),
     path('clip/export/download/<task_id>/', clip_export_download),

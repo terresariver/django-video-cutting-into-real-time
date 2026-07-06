@@ -8,15 +8,21 @@ import os
 # Create your models here.
 class User (AbstractUser):
     email = models.EmailField (unique=True)
-    full_name = models.CharField(max_length=255,blank=True)
+    username = models.CharField(max_length=150,unique=True,blank=True,null=True)
     is_active = models.BooleanField(default=True)
-    is_premium = models.BooleanField(default=True)
+    is_premium = models.BooleanField(default=False)
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
     def __str__(self) -> str:
         return self.email
 
+# class VideoProject(models.Model):
+#     user = models.ForeignKey(User,on_delete=models.CASCADE,related_name='user')
+#     date = models.DateTimeField(auto_now_add=True)
+
+#     def __str__(self) -> str:
+#         return self.id
 
 
 class Video(models.Model):
@@ -28,6 +34,7 @@ class Video(models.Model):
         ('ECHOUE','echoue'),
     ]
     user = models.ForeignKey(User,on_delete=models.CASCADE,related_name='videos')
+   # project = models.ForeignKey(VideoProject,on_delete=models.CASCADE,related_name="videos")
     titre = models.CharField(max_length=255,blank=True)
     original = models.FileField(upload_to='videos/originals')
     traite = models.FileField(upload_to='videos/traite',blank=True,null=True)
@@ -47,7 +54,6 @@ class ExportJob(models.Model):
         ('TERMINE','termine'),
         ('ECHOUE','echoue'),
     ]
-
     video       = models.ForeignKey("Video", on_delete=models.CASCADE, related_name="exports")
     task_id     = models.CharField(max_length=255, unique=True, db_index=True)
     fmt         = models.CharField(max_length=10)
@@ -121,6 +127,7 @@ class VideoClip(models.Model):
         ('ECHOUE','echoue'),
     ]
     user = models.ForeignKey(User,on_delete=models.CASCADE,related_name='clips')
+   # project = models.ForeignKey(VideoProject,on_delete=models.CASCADE,related_name="clips")
     job = models.ForeignKey(RealTimeClippingJob,on_delete=models.CASCADE,related_name="clips")
     clip = models.FileField(upload_to=clip_upload_path)
     status  = models.CharField(max_length=22, choices=STATUS_CHOICES, default="EN ATTENTE")

@@ -162,7 +162,8 @@ def video_trimming (job_id,params):
             clip = VideoClip.objects.create(
                 job = job,
                 debut = clips_timeline[i][start],
-                fin = clips_timeline[i][end]
+                fin = clips_timeline[i][end],
+                user = video.user 
             )
             output_filename = f"clip{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
             output_path =  os.path.join(settings.MEDIA_ROOT, 'videos', 'clips',f'{video_id}', output_filename)
@@ -301,7 +302,7 @@ def video_compressing(job_id):
             clip.status = "EN COURS DE TRAITEMENT"
             clip.save()
             input_path = clip.clip.path
-            output_filename = f"clipf_portrait{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
+            output_filename = f"clip_{i+1}_of_video{video_id}_{uuid.uuid4().hex}.mp4"
             output_path =  os.path.join(settings.MEDIA_ROOT, 'videos', 'clips',f'{video_id}', output_filename)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 

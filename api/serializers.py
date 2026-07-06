@@ -17,7 +17,7 @@ class WatermarkSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id','email','full_name']
+        fields = ['id','email','username']
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True,required=True,style={'input_type':'password'})
@@ -25,7 +25,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['email','full_name','password','password2']
+        fields = ['email','password','password2']
 
     def validate(self,data):
         if data['password'] != data['password2']:
@@ -35,7 +35,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self,validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
-        user = User.objects.create_user(**validated_data,password=password)
+        email = validated_data['email']
+        username = email.replace('@','_').replace('.','_')   #tom@gmail.com devient tom_gmail_com
+        user = User.objects.create_user(
+            email=email,
+            password= password,
+            username=username
+        )
         return user
 
 class LoginSerializer(serializers.Serializer):
