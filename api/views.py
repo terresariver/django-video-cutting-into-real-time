@@ -13,9 +13,6 @@ from rest_framework.permissions import AllowAny,IsAuthenticated
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
-
-
-
 #auth views
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -396,7 +393,7 @@ def export_clip(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def clip_export_status(request, task_id):
-    '''Point de verification ,retourne le status et l'url de telechargement download url
+    '''Point de verification , retourne le status et l'URL de telechargement download URL
     '''
     try:
         job = ClipExportJob.objects.get(task_id=task_id, clip__user=request.user)
@@ -433,37 +430,3 @@ def clip_export_download(request, task_id):
     response  = FileResponse(open(job.output_path, "rb"), content_type="video/mp4")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
-
-
-#suppression
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def delete_video (request):
-    '''supprime la video et tout ce qui y est lie'''
-    try:
-        video_id = request.data.get("video_id")
-        if not video_id :
-            return Response({
-                "erreur": "video id et action necessaires"
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        video = Video.objects.get(id=video_id, user=request.user)
-        os.remove(video.original.path)
-        os.remove(video.traite.path)
-        os.remove(video.audio.path)
-        os.remove(video.thumbnail.path)
-        video.delete()
-
-        
-        return Response({
-            "message": "suppression reussie",
-        }, status=status.HTTP_202_ACCEPTED)
-
-    except Video.DoesNotExist:
-        return Response({
-            "erreur": f"Video introuvable ou acces refuse"
-        }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({
-            "error": str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
